@@ -43,10 +43,7 @@ void UInteractComponent::BindQuestUpdateFunction()
 
 void UInteractComponent::OnQuestUpdate(FGameID QuestID, FGameID InteractObjectID)
 {
-	if(GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1 ,2.0f,FColor::Emerald,FString::Printf(TEXT("Interact Complete %s"),*GetOwner()->GetName()));
-	}
+
 }
 
 
