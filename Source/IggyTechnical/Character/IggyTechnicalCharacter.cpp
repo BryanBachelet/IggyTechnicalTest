@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "IggyTechnicalCharacter.h"
+
+#include "CharacterQuestComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -10,6 +12,10 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "IggyTechnical/Interaction/InteractComponent.h"
+#include "IggyTechnical/UI/IggyHUD.h"
+#include "IggyTechnical/UI/PopupManagerComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -52,6 +58,15 @@ AIggyTechnicalCharacter::AIggyTechnicalCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+
+	DetectBox = CreateDefaultSubobject<UBoxComponent>(TEXT("DetectBox"));
+	DetectBox->SetupAttachment(RootComponent);
+	DetectBox->SetGenerateOverlapEvents(true);
+	DetectBox->OnComponentBeginOverlap.AddDynamic(this,&AIggyTechnicalCharacter::OnBoxOverlap);
+	DetectBox->OnComponentEndOverlap.AddDynamic(this,&AIggyTechnicalCharacter::EndBoxOverlap);
+
+
+	QuestComponent = CreateDefaultSubobject<UCharacterQuestComponent>("Character Quest Component");
 }
 
 void AIggyTechnicalCharacter::BeginPlay()
@@ -59,6 +74,8 @@ void AIggyTechnicalCharacter::BeginPlay()
 	// Call the base class  
 	Super::BeginPlay();
 }
+
+
 
 //////////////////////////////////////////////////////////////////////////
 // Input
@@ -128,3 +145,81 @@ void AIggyTechnicalCharacter::Look(const FInputActionValue& Value)
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
+
+void AIggyTechnicalCharacter::OnBoxOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
+	bool bFromSweep, const FHitResult& SweepResult)
+{
+	UInteractComponent* InteractComponent  =OtherActor->GetComponentByClass<UInteractComponent>();
+	if(InteractComponent != nullptr)
+	{
+		IsAtInteractableRange = true;
+		OnInteractRangeStart();
+		CurrentInteractComponent = InteractComponent;
+	}
+	
+}
+
+void AIggyTechnicalCharacter::EndBoxOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	if(OtherActor->GetComponentByClass<UInteractComponent>())
+	{
+		IsAtInteractableRange = false;
+		CurrentInteractComponent  =nullptr;
+		OnInteractRangeOut();
+	}
+}
+
+#pragma region BlueprintEvent Functions
+void AIggyTechnicalCharacter::UpdateQuest_Implementation(UCharacterQuestData* QuestData)
+{
+}
+
+
+
+void AIggyTechnicalCharacter::FinishQuest_Implementation(FGameID IdQuestFinish)
+{
+}
+
+void AIggyTechnicalCharacter::AddQuest_Implementation(UCharacterQuestData* QuestData)
+{
+	
+}
+
+void AIggyTechnicalCharacter::OnInteractRangeOut_Implementation()
+{
+}
+
+
+void AIggyTechnicalCharacter::OnInteractEnd_Implementation()
+{
+}
+
+void AIggyTechnicalCharacter::OnInteractRangeStart_Implementation()
+{
+}
+
+#pragma  endregion
+
+void AIggyTechnicalCharacter::ChangeLocation(EWorldPlace place,FText name)
+{
+	CurrentLocation = place;
+	if(GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1,2.0f, FColor::Red, FString::Printf(TEXT("You change location to %s"), *UEnum::GetValueAsString( place)));
+	}
+
+	// Send the popup information
+	AHUD* HUD =	UGameplayStatics::GetPlayerController(GetWorld(),0)->GetHUD();
+	AIggyHUD* IggyHUD =  Cast<AIggyHUD>(HUD);
+	
+	FPopupData PopupData = FPopupData();
+	PopupData.Text = FString::Printf(TEXT("%s"),*name.ToString());
+	PopupData.DurationPopup =3.0f;
+	
+	IggyHUD->GetPopupManager()->AddPopupToQueue(PopupData);
+	
+	OnLocationChange.ExecuteIfBound(place);
+}
+
+
